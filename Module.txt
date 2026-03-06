@@ -1,0 +1,1004 @@
+================================================================================
+                        GROWTHPILOT AI - MODULE DOCUMENTATION
+                            Working Flow & User Guide
+================================================================================
+
+                              TABLE OF CONTENTS
+================================================================================
+
+1. INTRODUCTION
+2. SYSTEM ARCHITECTURE
+3. APPLICATION WORKFLOW
+4. MODULE BREAKDOWN
+   4.1  Authentication Module
+   4.2  Dashboard Module
+   4.3  Inventory Module
+   4.4  Sales Module
+   4.5  Customer Module
+   4.6  Expenses Module
+   4.7  AI Assistant Module
+   4.8  Credits Module
+   4.9  Reports Module
+   4.10 Settings Module
+5. USER GUIDE - HOW TO USE
+6. API FLOW DIAGRAM
+7. DATABASE MODELS
+8. COMMON WORKFLOWS
+
+================================================================================
+                            1. INTRODUCTION
+================================================================================
+
+GrowthPilot AI is a comprehensive retail management platform designed for small
+and medium business owners. The application follows a multi-tenant architecture
+where each merchant has their own isolated data store.
+
+KEY CONCEPTS:
+- User: The merchant who owns the account
+- Store: The business entity (each user can have multiple stores)
+- Multi-tenant: Each store's data is completely separate from others
+- Credits: Virtual currency used for AI features
+
+================================================================================
+                        2. SYSTEM ARCHITECTURE
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              CLIENT (BROWSER)                                │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                    React 18 + Vite + TypeScript                         ││
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐ ││
+│  │  │  Pages   │ │Components│ │  Layouts │ │  Store   │ │   Services    │ ││
+│  │  │(Routes) │ │   (UI)   │ │(Template)│ │ (Zustand)│ │  (API Client) │ ││
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └───────────────┘ ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     │ HTTP/REST API
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           BACKEND SERVER (Node.js)                           │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                    Express.js + TypeScript                               ││
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐ ││
+│  │  │  Routes  │→│Middleware│→│ Services │→│Validations│→│    Utils      │ ││
+│  │  │(Endpoints)│ │  (Auth)  │ │ (Logic)  │ │  (Zod)   │ │  (Response)   │ ││
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └───────────────┘ ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     │ Prisma ORM
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DATABASE (PostgreSQL)                              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐    │
+│  │  Users   │ │  Stores  │ │ Products │ │  Sales   │ │   Expenses    │    │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └───────────────┘    │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐    │
+│  │Customers │ │Categories│ │ Credits  │ │ AI Logs  │ │    Alerts     │    │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └───────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     │ API Integration
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        EXTERNAL SERVICES                                     │
+│  ┌───────────────────────────┐  ┌────────────────────────────────────────┐ │
+│  │    Groq AI (LLM API)      │  │         Email Service (SMTP)           │ │
+│  │   - Chat completions      │  │   - Password reset                     │ │
+│  │   - Llama 3.1 model       │  │   - Notifications                      │ │
+│  └───────────────────────────┘  └────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                        3. APPLICATION WORKFLOW
+================================================================================
+
+                      ┌─────────────────────────────┐
+                      │       USER OPENS APP        │
+                      └─────────────┬───────────────┘
+                                    │
+                      ┌─────────────▼───────────────┐
+                      │    CHECK AUTHENTICATION     │
+                      └─────────────┬───────────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    │                               │
+            ┌───────▼───────┐               ┌───────▼───────┐
+            │ NOT LOGGED IN │               │   LOGGED IN   │
+            └───────┬───────┘               └───────┬───────┘
+                    │                               │
+            ┌───────▼───────┐               ┌───────▼───────┐
+            │ LOGIN/REGISTER│               │   DASHBOARD   │
+            │     PAGE      │               │     PAGE      │
+            └───────┬───────┘               └───────┬───────┘
+                    │                               │
+            ┌───────▼───────┐               ┌───────▼───────┐
+            │ ENTER CREDS   │               │  VIEW METRICS │
+            │   & SUBMIT    │               │  & NAVIGATE   │
+            └───────┬───────┘               └───────┬───────┘
+                    │                               │
+            ┌───────▼───────┐       ┌───────────────┼───────────────┐
+            │ GET JWT TOKEN │       │               │               │
+            │ STORE IN MEM  │       ▼               ▼               ▼
+            └───────┬───────┘   ┌───────┐     ┌─────────┐    ┌──────────┐
+                    │           │PRODUCTS│     │  SALES  │    │ EXPENSES │
+                    └──────────►│INVENTORY│     │   POS   │    │ TRACKING │
+                                └───────┘     └─────────┘    └──────────┘
+
+================================================================================
+                        4. MODULE BREAKDOWN
+================================================================================
+
+================================================================================
+4.1 AUTHENTICATION MODULE
+================================================================================
+
+PURPOSE: Handle user registration, login, and session management
+
+FILES:
+  Backend:
+    - routes/auth.routes.ts     → API endpoints
+    - services/auth.service.ts  → Business logic
+    - middlewares/auth.ts       → JWT verification
+  
+  Frontend:
+    - pages/auth/Login.tsx      → Login page
+    - pages/auth/Register.tsx   → Registration page
+    - store/authStore.ts        → Auth state management
+
+ENDPOINTS:
+  POST /api/auth/register
+    Input:  { name, email, password, storeName }
+    Output: { user, store, tokens: { accessToken, refreshToken } }
+    
+  POST /api/auth/login
+    Input:  { email, password }
+    Output: { user, store, tokens: { accessToken, refreshToken } }
+    
+  POST /api/auth/refresh
+    Input:  { refreshToken }
+    Output: { accessToken, refreshToken }
+    
+  POST /api/auth/logout
+    Input:  Authorization header with token
+    Output: { message: "Logged out successfully" }
+    
+  GET /api/auth/me
+    Input:  Authorization header with token
+    Output: { user, store }
+
+WORKFLOW:
+  1. User enters email/password
+  2. Backend validates credentials
+  3. If valid, generate JWT tokens (access + refresh)
+  4. Frontend stores tokens in memory/localStorage
+  5. All subsequent requests include Authorization header
+  6. Middleware validates token on protected routes
+  7. Token refresh happens automatically when access token expires
+
+SECURITY:
+  - Passwords hashed with bcrypt (12 rounds)
+  - Access tokens expire in 7 days
+  - Refresh tokens expire in 30 days
+  - Tokens contain: userId, email, storeId
+
+================================================================================
+4.2 DASHBOARD MODULE
+================================================================================
+
+PURPOSE: Display key business metrics and analytics at a glance
+
+FILES:
+  Backend:
+    - routes/dashboard.routes.ts    → API endpoints
+    - services/dashboard.service.ts → Metrics calculations
+  
+  Frontend:
+    - pages/dashboard/Dashboard.tsx → Main dashboard page
+
+ENDPOINTS:
+  GET /api/dashboard/metrics
+    Output: {
+      revenue: { total, previousPeriod, growth },
+      profit: { total, previousPeriod, growth, margin },
+      sales: { count, previousPeriod, growth, averageValue },
+      inventory: { totalProducts, totalStockValue, lowStockCount, outOfStockCount },
+      expenses: { total, previousPeriod, growth }
+    }
+    
+  GET /api/dashboard/top-products
+    Query:  ?limit=5&startDate=&endDate=
+    Output: [{ product, totalSold, revenue, profit }]
+    
+  GET /api/dashboard/sales-chart
+    Query:  ?startDate=&endDate=&groupBy=day|week|month
+    Output: [{ date, revenue, profit, count }]
+    
+  GET /api/dashboard/revenue-by-category
+    Output: [{ category, revenue, percentage }]
+    
+  GET /api/dashboard/expense-breakdown
+    Output: [{ category, amount, percentage }]
+    
+  GET /api/dashboard/low-stock
+    Output: [{ product, stockQuantity, lowStockThreshold }]
+    
+  GET /api/dashboard/dead-stock
+    Output: [{ product, lastSoldAt, daysSinceLastSale }]
+    
+  GET /api/dashboard/fast-moving
+    Output: [{ product, totalSold, averageSalesPerDay }]
+
+METRICS DISPLAYED:
+  ┌─────────────────────────────────────────────────────────────┐
+  │ DASHBOARD                                                   │
+  │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+  │ │ REVENUE  │ │  PROFIT  │ │  SALES   │ │ EXPENSES │       │
+  │ │ ₹50,000  │ │ ₹15,000  │ │   125    │ │ ₹10,000  │       │
+  │ │  ↑ 12%   │ │  ↑ 8%    │ │  ↑ 5%    │ │  ↓ 3%    │       │
+  │ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
+  │                                                             │
+  │ ┌─────────────────────────┐  ┌─────────────────────────┐  │
+  │ │     SALES CHART         │  │    TOP PRODUCTS         │  │
+  │ │   ▄▄                    │  │ 1. Shirt - 50 sold      │  │
+  │ │  ▄██▄                   │  │ 2. Pants - 35 sold      │  │
+  │ │ ▄████▄                  │  │ 3. Shoes - 30 sold      │  │
+  │ └─────────────────────────┘  └─────────────────────────┘  │
+  │                                                             │
+  │ ┌──────────────────────────────────────────────────────┐  │
+  │ │                    LOW STOCK ALERTS                   │  │
+  │ │ ⚠ Product A - Only 5 left | ⚠ Product B - Only 3 left │  │
+  │ └──────────────────────────────────────────────────────┘  │
+  └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+4.3 INVENTORY MODULE
+================================================================================
+
+PURPOSE: Manage products, categories, and stock levels
+
+FILES:
+  Backend:
+    - routes/product.routes.ts    → API endpoints
+    - services/product.service.ts → Product logic
+    - validations/index.ts        → Product schemas
+  
+  Frontend:
+    - pages/inventory/Products.tsx    → Product list
+    - pages/inventory/AddProduct.tsx  → Add/edit product
+
+ENDPOINTS:
+  GET /api/products
+    Query: ?page=1&limit=20&search=&categoryId=&lowStock=false&sortBy=name&sortOrder=asc
+    Output: { products: [...], pagination: { page, limit, total, totalPages } }
+    
+  POST /api/products
+    Input: {
+      name, sku, barcode?, categoryId?, description?,
+      costPrice, sellingPrice, mrp?, gstRate?,
+      hsnCode?, unit?, stockQuantity?, lowStockThreshold?,
+      reorderQuantity?, location?, expiryDate?, batchNumber?, imageUrl?
+    }
+    Output: { product }
+    
+  GET /api/products/:id
+    Output: { product with category }
+    
+  PUT /api/products/:id
+    Input: { ...partial product fields }
+    Output: { updated product }
+    
+  DELETE /api/products/:id
+    Output: { message: "Product deleted" }
+    
+  POST /api/products/:id/stock-adjust
+    Input: { type: "add"|"subtract"|"set", quantity, reason? }
+    Output: { product, stockMovement }
+    
+  POST /api/products/bulk-import
+    Input: { products: [...] }
+    Output: { imported: count, failed: count, errors: [...] }
+
+CATEGORIES:
+  GET /api/products/categories
+    Output: [{ id, name, description, color, icon, productCount }]
+    
+  POST /api/products/categories
+    Input: { name, description?, color?, icon? }
+    Output: { category }
+    
+  PUT /api/products/categories/:id
+    Input: { name?, description?, color?, icon? }
+    Output: { category }
+    
+  DELETE /api/products/categories/:id
+    Output: { message: "Category deleted" }
+
+PRODUCT FIELDS EXPLAINED:
+  - sku: Stock Keeping Unit (unique identifier)
+  - barcode: For barcode scanner integration
+  - costPrice: How much you paid for the product
+  - sellingPrice: How much you sell it for
+  - mrp: Maximum Retail Price
+  - gstRate: GST percentage (0%, 5%, 12%, 18%, 28%)
+  - hsnCode: Harmonized System Nomenclature code (for GST)
+  - unit: pcs, kg, ltr, mtr, etc.
+  - stockQuantity: Current stock count
+  - lowStockThreshold: Alert when stock goes below this
+  - reorderQuantity: Suggested quantity to reorder
+
+================================================================================
+4.4 SALES MODULE
+================================================================================
+
+PURPOSE: Record sales, manage invoices, and track payments
+
+FILES:
+  Backend:
+    - routes/sale.routes.ts    → API endpoints
+    - services/sale.service.ts → Sale logic
+  
+  Frontend:
+    - pages/sales/NewSale.tsx  → POS interface
+    - pages/sales/Sales.tsx    → Sales list
+
+ENDPOINTS:
+  GET /api/sales
+    Query: ?page=1&limit=20&startDate=&endDate=&customerId=&paymentStatus=&paymentMethod=
+    Output: { sales: [...], pagination }
+    
+  POST /api/sales
+    Input: {
+      items: [{ productId, quantity, unitPrice?, discount? }],
+      customerId?,
+      paymentMethod: "CASH"|"CARD"|"UPI"|"BANK_TRANSFER"|"CREDIT"|"MIXED",
+      discountAmount?: number,
+      discountPercent?: number,
+      paidAmount: number,
+      notes?
+    }
+    Output: { sale with items and customer }
+    
+  GET /api/sales/:id
+    Output: { sale with items and customer }
+    
+  POST /api/sales/:id/cancel
+    Output: { sale with status: "CANCELLED", stock restored }
+    
+  GET /api/sales/summary
+    Query: ?startDate=&endDate=
+    Output: {
+      totalRevenue, totalProfit, totalTax, totalDiscount,
+      salesCount, averageOrderValue, averageProfitMargin,
+      byPaymentMethod: [{ method, count, total }]
+    }
+    
+  GET /api/sales/report/daily
+    Query: ?date=YYYY-MM-DD
+    Output: { daily summary similar to /summary }
+
+SALE WORKFLOW:
+  1. User adds products to cart (select product, enter quantity)
+  2. System calculates:
+     - Subtotal = sum of (quantity × unitPrice)
+     - Discount = discountAmount OR (subtotal × discountPercent / 100)
+     - Tax = sum of GST for each item
+     - Total = subtotal - discount + tax
+  3. User selects payment method
+  4. User enters paid amount
+  5. System calculates:
+     - Due Amount = total - paidAmount
+     - Payment Status = PAID (if due=0) | PARTIAL (if due>0)
+  6. On sale creation:
+     - Generate invoice number (INV-YYMMDD-XXXX)
+     - Deduct stock from inventory
+     - Update product.totalSold and lastSoldAt
+     - Update customer.totalPurchases and totalVisits
+  7. Sale can be cancelled to restore stock
+
+PAYMENT METHODS:
+  - CASH: Cash payment
+  - CARD: Debit/Credit card
+  - UPI: UPI payment (PhonePe, GPay, etc.)
+  - BANK_TRANSFER: NEFT/IMPS/RTGS
+  - CREDIT: On credit (partial/no payment now)
+  - MIXED: Combination of methods
+
+================================================================================
+4.5 CUSTOMER MODULE
+================================================================================
+
+PURPOSE: Manage customer database and track purchase history
+
+FILES:
+  Backend:
+    - routes/sale.routes.ts (includes customer endpoints)
+  
+  Frontend:
+    - pages/sales/Customers.tsx (if implemented)
+
+ENDPOINTS:
+  GET /api/sales/customers
+    Query: ?page=1&limit=20&search=
+    Output: { customers: [...], pagination }
+    
+  POST /api/sales/customers
+    Input: {
+      name: string (required),
+      phone?: string (Indian format: 10 digits starting with 6-9),
+      email?: string,
+      address?: string,
+      gstin?: string (15-char GST number),
+      notes?: string
+    }
+    Output: { customer }
+    
+  GET /api/sales/customers/:id
+    Output: { customer with recent sales }
+
+CUSTOMER FIELDS:
+  - name: Customer name
+  - phone: Mobile number (for SMS/WhatsApp)
+  - email: For email invoices
+  - address: Delivery/billing address
+  - gstin: For B2B invoices with GST
+  - totalPurchases: Automatically updated sum
+  - totalVisits: Number of purchases made
+  - lastVisitAt: Last purchase date
+
+================================================================================
+4.6 EXPENSES MODULE
+================================================================================
+
+PURPOSE: Track business expenses and categorize them
+
+FILES:
+  Backend:
+    - routes/expense.routes.ts    → API endpoints
+    - services/expense.service.ts → Expense logic
+  
+  Frontend:
+    - pages/expenses/Expenses.tsx      → Expense list
+    - pages/expenses/AddExpense.tsx    → Add expense
+
+ENDPOINTS:
+  GET /api/expenses
+    Query: ?page=1&limit=20&startDate=&endDate=&categoryId=
+    Output: { expenses: [...], pagination }
+    
+  POST /api/expenses
+    Input: {
+      title: string,
+      amount: number,
+      categoryId?: string,
+      description?: string,
+      date?: string (ISO date),
+      paymentMethod: "CASH"|"CARD"|"UPI"|"BANK_TRANSFER",
+      reference?: string,
+      isRecurring?: boolean,
+      recurringPeriod?: "daily"|"weekly"|"monthly"
+    }
+    Output: { expense with category }
+    
+  GET /api/expenses/:id
+    Output: { expense with category }
+    
+  PUT /api/expenses/:id
+    Input: { ...partial expense fields }
+    Output: { expense }
+    
+  DELETE /api/expenses/:id
+    Output: { message: "Expense deleted" }
+    
+  GET /api/expenses/summary
+    Query: ?startDate=&endDate=
+    Output: {
+      total, count, averageAmount,
+      byCategory: [{ category, total, count }],
+      byPaymentMethod: [{ method, total, count }]
+    }
+
+EXPENSE CATEGORIES:
+  GET /api/expenses/categories
+  POST /api/expenses/categories
+  PUT /api/expenses/categories/:id
+  DELETE /api/expenses/categories/:id
+
+COMMON EXPENSE CATEGORIES:
+  - Rent
+  - Utilities (Electricity, Water, Internet)
+  - Salaries
+  - Raw Materials
+  - Transportation
+  - Marketing
+  - Maintenance
+  - Miscellaneous
+
+================================================================================
+4.7 AI ASSISTANT MODULE
+================================================================================
+
+PURPOSE: Provide AI-powered business insights and recommendations
+
+FILES:
+  Backend:
+    - routes/ai.routes.ts    → API endpoints
+    - services/ai.service.ts → Groq AI integration
+    - config/index.ts        → API key configuration
+  
+  Frontend:
+    - pages/ai/AIAssistant.tsx → Chat interface
+
+ENDPOINTS:
+  POST /api/ai/chat
+    Input: {
+      message: string (user's question),
+      context?: {
+        includeInventory?: boolean,
+        includeSales?: boolean,
+        includeExpenses?: boolean
+      }
+    }
+    Output: {
+      response: string (AI's answer),
+      tokensUsed: number,
+      latencyMs: number,
+      creditsUsed: 4,
+      remainingCredits: number
+    }
+    
+  GET /api/ai/predictions
+    Output: { salesPredictions, restockRecommendations }
+    
+  GET /api/ai/recommendations
+    Output: { marketing, growth, inventory recommendations }
+
+AI FEATURES:
+  1. CHAT ASSISTANT (4 credits per query)
+     - Ask natural language questions about your business
+     - Get insights on sales, inventory, expenses
+     - Receive recommendations and advice
+     
+  2. SALES PREDICTIONS (5 credits)
+     - Forecast future sales based on history
+     - Identify trends and patterns
+     
+  3. RESTOCK RECOMMENDATIONS (3 credits)
+     - Analyze inventory levels
+     - Suggest what to reorder and when
+     
+  4. MARKETING SUGGESTIONS (4 credits)
+     - Product promotion ideas
+     - Customer targeting strategies
+     
+  5. GROWTH INSIGHTS (5 credits)
+     - Business growth opportunities
+     - Competitive analysis tips
+
+HOW IT WORKS:
+  1. User sends a query
+  2. Backend gathers business context:
+     - Store details
+     - Recent sales data
+     - Inventory status
+     - Expense summary
+  3. Context + query sent to Groq AI (Llama 3.1 model)
+  4. AI generates response
+  5. Credits deducted from store balance
+  6. Response sent to frontend
+
+EXAMPLE QUERIES:
+  - "How is my business doing today?"
+  - "Which products should I restock?"
+  - "What were my top selling products this week?"
+  - "How can I reduce expenses?"
+  - "Give me marketing ideas for slow-moving products"
+
+================================================================================
+4.8 CREDITS MODULE
+================================================================================
+
+PURPOSE: Manage AI credits balance and transactions
+
+FILES:
+  Backend:
+    - routes/credit.routes.ts → API endpoints
+  
+  Frontend:
+    - pages/credits/Credits.tsx → Credit management page
+
+ENDPOINTS:
+  GET /api/credits/balance
+    Output: { balance: number, lastUpdated: date }
+    
+  GET /api/credits/history
+    Query: ?page=1&limit=20&type=
+    Output: { transactions: [...], pagination }
+    
+  POST /api/credits/purchase
+    Input: {
+      package: "starter"|"professional"|"enterprise",
+      paymentMethod: string
+    }
+    Output: { transaction, newBalance }
+
+CREDIT PACKAGES:
+  ┌─────────────────────────────────────────────────────────┐
+  │  PACKAGE         │  CREDITS   │   PRICE (INR)          │
+  ├─────────────────────────────────────────────────────────┤
+  │  Starter         │   2,000    │    ₹499                │
+  │  Professional    │  10,000    │  ₹2,999                │
+  │  Enterprise      │  50,000    │  ₹9,999                │
+  └─────────────────────────────────────────────────────────┘
+
+TRANSACTION TYPES:
+  - INITIAL_GRANT: Free 100 credits on signup
+  - PURCHASE: Credits bought
+  - AI_USAGE: Credits used for AI features
+  - REFUND: Credits refunded
+  - BONUS: Promotional credits
+  - EXPIRED: Expired unused credits
+
+================================================================================
+4.9 REPORTS MODULE
+================================================================================
+
+PURPOSE: Generate detailed business reports
+
+FILES:
+  Frontend:
+    - pages/reports/Reports.tsx → Reports page
+
+AVAILABLE REPORTS:
+  1. SALES REPORT
+     - Daily/Weekly/Monthly sales
+     - Revenue and profit trends
+     - Payment method breakdown
+     - Top performing days
+     
+  2. INVENTORY REPORT
+     - Stock levels
+     - Low stock items
+     - Dead stock analysis
+     - Stock movement history
+     
+  3. PROFIT & LOSS
+     - Total revenue
+     - Cost of goods sold
+     - Gross profit
+     - Expenses
+     - Net profit
+     
+  4. CUSTOMER REPORT
+     - Top customers
+     - Purchase patterns
+     - Customer acquisition
+
+================================================================================
+4.10 SETTINGS MODULE
+================================================================================
+
+PURPOSE: Configure store and user preferences
+
+FILES:
+  Frontend:
+    - pages/settings/Settings.tsx → Settings page
+
+CONFIGURABLE OPTIONS:
+  1. STORE PROFILE
+     - Store name
+     - Business type
+     - GSTIN
+     - Address, City, State, Pincode
+     - Contact phone and email
+     - Logo
+     
+  2. BUSINESS SETTINGS
+     - Currency (default: INR)
+     - Timezone (default: Asia/Kolkata)
+     - Fiscal year start month
+     - Default low stock threshold
+     
+  3. NOTIFICATIONS
+     - Enable/disable notifications
+     - Low stock alerts
+     - Weekly report emails
+     
+  4. APPEARANCE
+     - Dark mode toggle
+     
+  5. ACCOUNT
+     - Change password
+     - Update profile
+
+================================================================================
+                        5. USER GUIDE - HOW TO USE
+================================================================================
+
+================================================================================
+GETTING STARTED
+================================================================================
+
+STEP 1: REGISTER YOUR ACCOUNT
+  1. Open the application in your browser
+  2. Click "Register" on the login page
+  3. Fill in:
+     - Your name
+     - Email address
+     - Password (min 6 characters)
+     - Store name
+  4. Click "Create Account"
+  5. You'll receive 100 FREE AI credits!
+
+STEP 2: SETUP YOUR INVENTORY
+  1. Go to "Products" in the sidebar
+  2. Click "Add Product"
+  3. Enter product details:
+     - Product name
+     - SKU (unique code)
+     - Cost price (what you pay)
+     - Selling price (what customer pays)
+     - Initial stock quantity
+  4. Save the product
+  5. Repeat for all your products
+
+STEP 3: CREATE CATEGORIES (Optional)
+  1. In Products page, click "Categories"
+  2. Add categories like "Electronics", "Clothing", etc.
+  3. Assign products to categories
+
+STEP 4: ADD CUSTOMERS (Optional)
+  1. When making a sale, you can add new customers
+  2. Or go to Sales → Customers
+  3. Add customer details (name, phone, etc.)
+
+================================================================================
+DAILY OPERATIONS
+================================================================================
+
+MAKING A SALE:
+  1. Click "New Sale" in the sidebar
+  2. Search and add products to cart
+  3. Adjust quantity if needed
+  4. Select customer (optional)
+  5. Choose payment method
+  6. Enter amount received
+  7. Click "Complete Sale"
+  8. Invoice number is generated automatically
+
+CHECKING DASHBOARD:
+  1. Dashboard shows today's metrics
+  2. See revenue, profit, and sales count
+  3. View top selling products
+  4. Check low stock alerts
+  5. Analyze sales trends in charts
+
+RECORDING EXPENSES:
+  1. Go to "Expenses" in sidebar
+  2. Click "Add Expense"
+  3. Enter expense details:
+     - Title (e.g., "Electricity Bill")
+     - Amount
+     - Category (optional)
+     - Payment method
+  4. Save the expense
+
+RESTOCKING PRODUCTS:
+  1. Go to "Products"
+  2. Find the product to restock
+  3. Click "Adjust Stock" or edit the product
+  4. Add the new stock quantity
+  5. Optionally enter reason for adjustment
+
+================================================================================
+USING AI ASSISTANT
+================================================================================
+
+  1. Go to "AI Assistant" in sidebar
+  2. Type your question in natural language
+  3. Examples:
+     - "How was my sales today?"
+     - "Which products are selling well?"
+     - "What should I restock?"
+     - "Give me tips to increase profit"
+  4. AI analyzes your data and responds
+  5. Each query costs 4 credits
+  6. Check your credit balance in the "Credits" page
+
+================================================================================
+                        6. API FLOW DIAGRAM
+================================================================================
+
+REQUEST FLOW:
+  
+  ┌──────────┐     ┌───────────┐     ┌────────────┐     ┌──────────┐
+  │  Client  │────►│   Route   │────►│ Middleware │────►│ Validate │
+  └──────────┘     └───────────┘     └────────────┘     └────┬─────┘
+                                                              │
+                                                              ▼
+  ┌──────────┐     ┌───────────┐     ┌────────────┐     ┌──────────┐
+  │ Response │◄────│  Response │◄────│   Service  │◄────│ Database │
+  └──────────┘     │  Handler  │     │   Logic    │     │  Query   │
+                   └───────────┘     └────────────┘     └──────────┘
+
+AUTHENTICATION FLOW:
+
+  ┌──────────┐     ┌───────────┐     ┌────────────┐
+  │  Login   │────►│  Verify   │────►│  Generate  │
+  │ Request  │     │ Password  │     │   Tokens   │
+  └──────────┘     └───────────┘     └─────┬──────┘
+                                           │
+                                           ▼
+  ┌──────────┐     ┌───────────┐     ┌────────────┐
+  │  Use API │◄────│  Include  │◄────│   Store    │
+  │ With Auth│     │  In Header│     │   Tokens   │
+  └──────────┘     └───────────┘     └────────────┘
+
+================================================================================
+                        7. DATABASE MODELS
+================================================================================
+
+CORE ENTITIES:
+
+USER
+├── id (UUID)
+├── email (unique)
+├── password (hashed)
+├── firstName
+├── lastName
+├── phone
+├── isEmailVerified
+├── lastLoginAt
+└── stores[] ─────────────► STORE
+
+STORE (Tenant)
+├── id (UUID)
+├── userId ───────────────► USER
+├── name
+├── businessType
+├── gstin
+├── address, city, state, pincode
+├── creditBalance (default: 100)
+├── products[]
+├── sales[]
+├── expenses[]
+└── customers[]
+
+PRODUCT
+├── id (UUID)
+├── storeId ──────────────► STORE
+├── categoryId ───────────► CATEGORY
+├── sku (unique per store)
+├── barcode
+├── name
+├── costPrice
+├── sellingPrice
+├── gstRate
+├── hsnCode
+├── stockQuantity
+├── lowStockThreshold
+├── totalSold
+└── lastSoldAt
+
+SALE
+├── id (UUID)
+├── storeId ──────────────► STORE
+├── customerId ───────────► CUSTOMER
+├── invoiceNumber
+├── invoiceDate
+├── subtotal
+├── discountAmount
+├── taxAmount
+├── totalAmount
+├── paymentMethod (CASH/CARD/UPI/BANK_TRANSFER/CREDIT)
+├── paymentStatus (PAID/PARTIAL/UNPAID)
+├── paidAmount
+├── status (COMPLETED/CANCELLED)
+└── items[] ──────────────► SALE_ITEM
+
+SALE_ITEM
+├── id (UUID)
+├── saleId ───────────────► SALE
+├── productId ────────────► PRODUCT
+├── productName (snapshot)
+├── quantity
+├── unitPrice
+├── costPrice
+├── discount
+├── gstAmount
+├── totalPrice
+└── profit
+
+EXPENSE
+├── id (UUID)
+├── storeId ──────────────► STORE
+├── categoryId ───────────► EXPENSE_CATEGORY
+├── title
+├── amount
+├── date
+├── paymentMethod
+├── isRecurring
+└── recurringPeriod
+
+CUSTOMER
+├── id (UUID)
+├── storeId ──────────────► STORE
+├── name
+├── phone
+├── email
+├── gstin
+├── totalPurchases
+├── totalVisits
+└── sales[] ──────────────► SALE
+
+================================================================================
+                        8. COMMON WORKFLOWS
+================================================================================
+
+WORKFLOW 1: COMPLETE SALE WITH CUSTOMER
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. Open New Sale page                                                       │
+│ 2. Search product by name/SKU/barcode                                       │
+│ 3. Add to cart → Quantity defaults to 1                                     │
+│ 4. Add more products as needed                                              │
+│ 5. Search/select or create new customer                                     │
+│ 6. Apply discount (amount or percentage) if any                            │
+│ 7. Select payment method (CASH)                                             │
+│ 8. Enter paid amount (₹750)                                                 │
+│ 9. System calculates change/due                                             │
+│ 10. Click "Complete Sale"                                                   │
+│ 11. Invoice generated: INV-260306-0001                                      │
+│ 12. Stock automatically reduced                                             │
+│ 13. Sale appears in Sales list                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+WORKFLOW 2: CHECK AND RESTOCK LOW STOCK ITEMS
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. Check Dashboard for low stock alerts                                     │
+│ 2. OR go to Products and filter by "Low Stock"                             │
+│ 3. Identify items below threshold                                           │
+│ 4. For each item, click "Edit" or "Adjust Stock"                           │
+│ 5. Enter new stock quantity                                                 │
+│ 6. Add reason: "Restocked from supplier X"                                  │
+│ 7. Save changes                                                             │
+│ 8. Stock movement logged automatically                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+WORKFLOW 3: ANALYZE BUSINESS PERFORMANCE
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. Go to Dashboard                                                          │
+│ 2. Select date range (This Week/Month)                                      │
+│ 3. Review key metrics:                                                       │
+│    - Total Revenue with growth %                                            │
+│    - Profit and profit margin                                               │
+│    - Number of sales                                                         │
+│    - Expenses                                                                │
+│ 4. Check Sales Chart for trends                                             │
+│ 5. Review Top Selling Products                                              │
+│ 6. Check Revenue by Category                                                │
+│ 7. For detailed analysis, use AI Assistant:                                 │
+│    "Give me insights on this week's performance"                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+WORKFLOW 4: RECORD MONTHLY EXPENSES
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. Go to Expenses page                                                      │
+│ 2. Click "Add Expense"                                                      │
+│ 3. Enter: Title = "Shop Rent - March 2026"                                 │
+│ 4. Amount = ₹15,000                                                         │
+│ 5. Category = "Rent"                                                        │
+│ 6. Payment Method = "Bank Transfer"                                         │
+│ 7. Mark as "Recurring" = Yes                                                │
+│ 8. Recurring Period = "Monthly"                                             │
+│ 9. Save expense                                                              │
+│ 10. Expense shows in list and analytics                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                              END OF DOCUMENTATION
+================================================================================
+
+For technical support or feature requests, please contact the development team.
+
+GrowthPilot AI - Empowering Small Businesses with AI

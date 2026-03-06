@@ -1,0 +1,110 @@
+version: '3.8'
+
+# Development Docker Compose
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: growthpilot-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: growthpilot
+      POSTGRES_PASSWORD: growthpilot_dev
+      POSTGRES_DB: growthpilot_dev
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U growthpilot -d growthpilot_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - growthpilot-dev
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: growthpilot-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - growthpilot-dev
+
+  # Backend API Server (Development with hot reload)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: growthpilot-backend-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://growthpilot:growthpilot_dev@postgres:5432/growthpilot_dev?schema=public
+      JWT_SECRET: dev-jwt-secret-do-not-use-in-production
+      JWT_REFRESH_SECRET: dev-refresh-secret-do-not-use-in-production
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - growthpilot-dev
+
+  # Frontend (Development with hot reload)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: growthpilot-frontend-dev
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+    depends_on:
+      - backend
+    networks:
+      - growthpilot-dev
+
+  # PgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: growthpilot-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@growthpilot.ai
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - growthpilot-dev
+    profiles:
+      - tools
+
+volumes:
+  postgres_data_dev:
+    driver: local
+
+networks:
+  growthpilot-dev:
+    driver: bridge

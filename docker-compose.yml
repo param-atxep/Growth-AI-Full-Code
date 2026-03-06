@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: growthpilot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-growthpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-growthpilot_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-growthpilot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-growthpilot} -d ${POSTGRES_DB:-growthpilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - growthpilot-network
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: growthpilot-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - growthpilot-network
+
+  # Backend API Server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: growthpilot-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-growthpilot}:${POSTGRES_PASSWORD:-growthpilot_secret}@postgres:5432/${POSTGRES_DB:-growthpilot}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-super-secret-refresh-key-change-in-production}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - growthpilot-network
+
+  # Frontend Web Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: growthpilot-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - growthpilot-network
+
+  # Database Migrations (run once)
+  migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder
+    container_name: growthpilot-migrations
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-growthpilot}:${POSTGRES_PASSWORD:-growthpilot_secret}@postgres:5432/${POSTGRES_DB:-growthpilot}?schema=public
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - growthpilot-network
+    profiles:
+      - migrate
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  growthpilot-network:
+    driver: bridge
