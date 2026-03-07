@@ -21,7 +21,13 @@ app.use(cors({
     if (origin.startsWith('http://localhost:')) return callback(null, true);
     // Allow configured frontend URL
     if (origin === config.frontend.url) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
+    // Allow Vercel preview deployments
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    // Allow Netlify deployments
+    if (origin.endsWith('.netlify.app')) return callback(null, true);
+    // Log blocked origins for debugging
+    console.log('Blocked CORS origin:', origin);
+    callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
