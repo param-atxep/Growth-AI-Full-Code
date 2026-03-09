@@ -27,20 +27,10 @@ const format = winston.format.combine(
   ),
 );
 
+// Use console-only logging (cloud platforms capture stdout/stderr automatically)
 const transports: winston.transport[] = [
   new winston.transports.Console(),
 ];
-
-// Only add file transports in development (cloud platforms like Render don't allow writing to filesystem)
-if (config.isDevelopment) {
-  transports.push(
-    new winston.transports.File({
-      filename: 'logs/error.log',
-      level: 'error',
-    }),
-    new winston.transports.File({ filename: 'logs/all.log' }),
-  );
-}
 
 export const logger = winston.createLogger({
   level: config.isDevelopment ? 'debug' : 'warn',
