@@ -5,8 +5,18 @@ import { AppError } from '../utils/AppError.js';
 import { logger } from '../utils/logger.js';
 import { addCredits, CREDIT_PLANS } from '../middlewares/credits.js';
 
-// Initialize Stripe instance
-const stripe = new Stripe(config.stripe.secretKey);
+// Initialize Stripe instance (may be null if not configured)
+const stripe = config.stripe.secretKey
+  ? new Stripe(config.stripe.secretKey)
+  : null;
+
+const ensureStripeConfigured = () => {
+  if (!stripe) {
+    logger.error('Stripe is not configured - STRIPE_SECRET_KEY is missing');
+    throw AppError.internal('Payment service is not configured. Please contact support.');
+  }
+  return stripe;
+};
 
 export interface CreateCheckoutInput {
   storeId: string;
@@ -18,6 +28,7 @@ export interface CreateCheckoutInput {
  * Create a Stripe Checkout Session for credit purchase
  */
 export const createCheckoutSession = async (input: CreateCheckoutInput) => {
+  const stripeClient = ensureStripeConfigured();
   const { storeId, planId, userId } = input;
 
   // Find the plan
@@ -38,7 +49,7 @@ export const createCheckoutSession = async (input: CreateCheckoutInput) => {
 
   try {
     // Create Stripe Checkout Session
-    const session = await stripe.checkout.sessions.create({
+    const session = await stripeClient.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
@@ -117,9 +128,11 @@ export const verifyCheckoutSession = async (sessionId: string, storeId: string) 
     return { success: true, message: 'Payment already processed', credits: payment.credits };
   }
 
+  const stripeClient = ensureStripeConfigured();
+
   try {
     // Verify session with Stripe
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await stripeClient.checkout.sessions.retrieve(sessionId);
 
     if (session.payment_status !== 'paid') {
       return { success: false, message: 'Payment not completed', status: session.payment_status };
@@ -212,10 +225,11 @@ export const handleStripeWebhook = async (
   payload: Buffer,
   signature: string
 ) => {
+  const stripeClient = ensureStripeConfigured();
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = stripeClient.webhooks.constructEvent(
       payload,
       signature,
       config.stripe.webhookSecret
