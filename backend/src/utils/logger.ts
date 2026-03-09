@@ -27,14 +27,20 @@ const format = winston.format.combine(
   ),
 );
 
-const transports = [
+const transports: winston.transport[] = [
   new winston.transports.Console(),
-  new winston.transports.File({
-    filename: 'logs/error.log',
-    level: 'error',
-  }),
-  new winston.transports.File({ filename: 'logs/all.log' }),
 ];
+
+// Only add file transports in development (cloud platforms like Render don't allow writing to filesystem)
+if (config.isDevelopment) {
+  transports.push(
+    new winston.transports.File({
+      filename: 'logs/error.log',
+      level: 'error',
+    }),
+    new winston.transports.File({ filename: 'logs/all.log' }),
+  );
+}
 
 export const logger = winston.createLogger({
   level: config.isDevelopment ? 'debug' : 'warn',
