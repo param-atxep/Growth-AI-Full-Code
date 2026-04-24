@@ -30,6 +30,7 @@ const navigation = [
   { name: 'Sales', href: '/sales', icon: ShoppingCart },
   { name: 'Expenses', href: '/expenses', icon: Receipt },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
+  { name: 'New Tab', href: '/reports', icon: BarChart3 },
   {
     name: 'AI Assistant',
     icon: Sparkles,
